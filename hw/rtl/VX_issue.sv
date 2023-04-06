@@ -61,7 +61,7 @@ module VX_issue #(
     assign dispatch_if.valid    = ibuffer_if.valid && scoreboard_if.ready;
     assign dispatch_if.uuid     = ibuffer_if.uuid;
     assign dispatch_if.wid      = ibuffer_if.wid;
-    assign dispatch_if.tmask    = ibuffer_if.tmask;
+    assign dispatch_if.tmask    = ibuffer_if.tmask; //s
     assign dispatch_if.PC       = ibuffer_if.PC;
     assign dispatch_if.ex_type  = ibuffer_if.ex_type;    
     assign dispatch_if.op_type  = ibuffer_if.op_type; 
@@ -75,6 +75,7 @@ module VX_issue #(
 
     // issue the instruction
     assign ibuffer_if.ready = scoreboard_if.ready && dispatch_if.ready;
+    
 
     `RESET_RELAY (ibuf_reset);
     `RESET_RELAY (scoreboard_reset);
@@ -156,6 +157,7 @@ module VX_issue #(
     reg [`PERF_CTR_BITS-1:0] perf_lsu_stalls;
     reg [`PERF_CTR_BITS-1:0] perf_csr_stalls;
     reg [`PERF_CTR_BITS-1:0] perf_gpu_stalls;
+    reg [`PERF_CTR_BITS-1:0] perf_active_threads;
 `ifdef EXT_F_ENABLE
     reg [`PERF_CTR_BITS-1:0] perf_fpu_stalls;
 `endif
@@ -168,10 +170,16 @@ module VX_issue #(
             perf_lsu_stalls <= 0;
             perf_csr_stalls <= 0;
             perf_gpu_stalls <= 0;
+            perf_active_threads <=0;
         `ifdef EXT_F_ENABLE
             perf_fpu_stalls <= 0;
         `endif
         end else begin
+            ///// count bit in tmask => active threads during that cycle
+            if (ibuffer_if.valid & ibuffer_if.ready) begin
+                perf_active_threads <= {41'b0, $countbits(ibuffer_if.tmask, '1)} + perf_active_threads;
+            //////
+            end
             if (decode_if.valid & ~decode_if.ready) begin
                 perf_ibf_stalls <= perf_ibf_stalls  + `PERF_CTR_BITS'd1;
             end
@@ -199,6 +207,8 @@ module VX_issue #(
     assign perf_issue_if.lsu_stalls = perf_lsu_stalls;
     assign perf_issue_if.csr_stalls = perf_csr_stalls;
     assign perf_issue_if.gpu_stalls = perf_gpu_stalls;
+    assign perf_pipeline_if.active_threads = perf_active_threads;
+
 `ifdef EXT_F_ENABLE
     assign perf_issue_if.fpu_stalls = perf_fpu_stalls;
 `endif
